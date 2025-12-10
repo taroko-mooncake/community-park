@@ -5,6 +5,7 @@ import { Park, Task, ViewState, TaskStatus } from './types';
 import { ParkCard } from './components/ParkCard';
 import { Assistant } from './components/Assistant';
 import { Button } from './components/Button';
+import { ParkMap } from './components/ParkMap';
 import { suggestTasksFromDescription, findLocalParks } from './services/geminiService';
 import { 
   Sprout, 
@@ -22,55 +23,81 @@ import {
   Navigation,
   Trash2,
   Check,
-  MapPin as MapPinIcon
+  MapPin as MapPinIcon,
+  Trophy,
+  Award,
+  X,
+  History,
+  TrendingUp
 } from 'lucide-react';
 
 // --- Sub-components defined here for simplicity of file structure ---
 
 const Header: React.FC<{ 
   currentView: ViewState, 
-  setView: (v: ViewState) => void 
-}> = ({ currentView, setView }) => (
-  <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-stone-200">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div 
-        className="flex items-center gap-2 cursor-pointer" 
-        onClick={() => setView(ViewState.HOME)}
-      >
-        <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white">
-          <Sprout size={20} />
-        </div>
-        <span className="text-xl font-bold text-stone-800 tracking-tight">Community Roots</span>
-      </div>
-      
-      <nav className="hidden md:flex items-center gap-6">
-        <button 
+  setView: (v: ViewState) => void,
+  userPoints: number,
+  onOpenHistory: () => void
+}> = ({ currentView, setView, userPoints, onOpenHistory }) => {
+  const level = Math.floor(userPoints / 100);
+  const progressToNext = userPoints % 100;
+  
+  return (
+    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-stone-200">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div 
+          className="flex items-center gap-2 cursor-pointer" 
           onClick={() => setView(ViewState.HOME)}
-          className={`text-sm font-medium transition-colors ${currentView === ViewState.HOME ? 'text-emerald-600' : 'text-stone-600 hover:text-stone-900'}`}
         >
-          Home
-        </button>
-        <button 
-          onClick={() => setView(ViewState.PARKS)}
-          className={`text-sm font-medium transition-colors ${currentView === ViewState.PARKS ? 'text-emerald-600' : 'text-stone-600 hover:text-stone-900'}`}
-        >
-          Explore Parks
-        </button>
-        <button 
-          onClick={() => setView(ViewState.ASSISTANT)}
-          className={`text-sm font-medium transition-colors ${currentView === ViewState.ASSISTANT ? 'text-emerald-600' : 'text-stone-600 hover:text-stone-900'}`}
-        >
-          Garden Sage
-        </button>
-      </nav>
-
-      <div className="md:hidden">
-         {/* Mobile menu placeholder - simplifying for this demo */}
-         <Button size="sm" onClick={() => setView(ViewState.PARKS)}>Start Helping</Button>
+          <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white">
+            <Sprout size={20} />
+          </div>
+          <span className="hidden sm:inline text-xl font-bold text-stone-800 tracking-tight">Community Roots</span>
+        </div>
+        
+        <nav className="hidden md:flex items-center gap-6">
+          <button 
+            onClick={() => setView(ViewState.HOME)}
+            className={`text-sm font-medium transition-colors ${currentView === ViewState.HOME ? 'text-emerald-600' : 'text-stone-600 hover:text-stone-900'}`}
+          >
+            Home
+          </button>
+          <button 
+            onClick={() => setView(ViewState.ASSISTANT)}
+            className={`text-sm font-medium transition-colors ${currentView === ViewState.ASSISTANT ? 'text-emerald-600' : 'text-stone-600 hover:text-stone-900'}`}
+          >
+            Garden Sage
+          </button>
+        </nav>
+  
+        <div className="flex items-center gap-4">
+          <div 
+            onClick={onOpenHistory}
+            className="bg-emerald-50 hover:bg-emerald-100 transition-colors cursor-pointer rounded-full pl-1 pr-4 py-1 flex items-center gap-3 border border-emerald-100 group"
+            title="View Points History"
+          >
+             <div className="w-8 h-8 rounded-full bg-emerald-100 group-hover:bg-emerald-200 transition-colors flex items-center justify-center text-emerald-700">
+               <Trophy size={14} />
+             </div>
+             <div className="flex flex-col">
+               <div className="flex justify-between items-baseline gap-2">
+                 <span className="text-xs font-bold text-emerald-900 uppercase tracking-wider">Root Depth</span>
+                 <span className="text-xs font-bold text-emerald-600">{level}m</span>
+               </div>
+               <div className="w-24 h-1.5 bg-emerald-200 rounded-full mt-0.5 overflow-hidden">
+                 <div 
+                   className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
+                   style={{ width: `${progressToNext}%` }}
+                 />
+               </div>
+               <span className="text-[10px] text-emerald-600 leading-none mt-0.5 text-right">{userPoints} pts</span>
+             </div>
+          </div>
+        </div>
       </div>
-    </div>
-  </header>
-);
+    </header>
+  );
+};
 
 const Footer = () => (
   <footer className="bg-stone-900 text-stone-400 py-12">
@@ -87,6 +114,13 @@ const Footer = () => (
   </footer>
 );
 
+interface HistoryItem {
+  id: string;
+  action: string;
+  points: number;
+  date: string;
+}
+
 export default function App() {
   const [view, setView] = useState<ViewState>(ViewState.HOME);
   const [parks, setParks] = useState<Park[]>(INITIAL_PARKS);
@@ -94,13 +128,29 @@ export default function App() {
   const [newObservation, setNewObservation] = useState('');
   const [isGeneratingTasks, setIsGeneratingTasks] = useState(false);
   
+  // Gamification state
+  const [userPoints, setUserPoints] = useState(40); // Start with some points for demo
+  const [notification, setNotification] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [pointsHistory, setPointsHistory] = useState<HistoryItem[]>([
+    { id: 'init', action: 'Joined Community Roots', points: 40, date: new Date(Date.now() - 86400000 * 2).toLocaleDateString() }
+  ]);
+  
   // Search state
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('Columbia Heights, DC');
   const [isSearching, setIsSearching] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
   // Derive selected park
   const selectedPark = parks.find(p => p.id === selectedParkId);
+
+  // Clear notification after 3 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   const handleParkClick = (id: string) => {
     setSelectedParkId(id);
@@ -138,16 +188,29 @@ export default function App() {
   };
 
   const handleCompleteTask = (parkId: string, taskId: string) => {
+    let completedTaskTitle = '';
     setParks(prev => prev.map(park => {
       if (park.id !== parkId) return park;
       return {
         ...park,
         tasks: park.tasks.map(task => {
           if (task.id !== taskId) return task;
+          completedTaskTitle = task.title;
           return { ...task, status: TaskStatus.COMPLETED };
         })
       };
     }));
+    
+    // Gamification reward
+    const pointsAwarded = 10;
+    setUserPoints(prev => prev + pointsAwarded);
+    setPointsHistory(prev => [{
+      id: Date.now().toString(),
+      action: `Completed: ${completedTaskTitle}`,
+      points: pointsAwarded,
+      date: new Date().toLocaleDateString()
+    }, ...prev]);
+    setNotification(`Task Complete! +${pointsAwarded} Points Collected`);
   };
 
   const handleGenerateTasks = async () => {
@@ -209,8 +272,7 @@ export default function App() {
     
     if (foundParks.length > 0) {
       setParks(foundParks);
-      // Auto navigate to parks view to see results
-      setView(ViewState.PARKS);
+      // Stay on home, the list will update
     } else {
       setLocationError("No parks found.");
     }
@@ -244,8 +306,15 @@ export default function App() {
                 <input 
                   type="text" 
                   placeholder="Enter city, neighborhood, or park name..."
-                  className="w-full pl-10 pr-4 py-3 rounded-lg focus:outline-none text-stone-800 placeholder-stone-400"
+                  className={`w-full pl-10 pr-4 py-3 rounded-lg focus:outline-none transition-colors ${
+                    searchQuery === 'Columbia Heights, DC' ? 'italic text-stone-500' : 'text-stone-800 placeholder-stone-400'
+                  }`}
                   value={searchQuery}
+                  onFocus={() => {
+                    if (searchQuery === 'Columbia Heights, DC') {
+                      setSearchQuery('');
+                    }
+                  }}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch(false)}
                 />
@@ -294,52 +363,38 @@ export default function App() {
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-between items-end mb-8">
           <div>
-            <h2 className="text-3xl font-bold text-stone-900">Featured Parks</h2>
-            <p className="text-stone-500 mt-2">These spaces need your help the most right now.</p>
+            <h2 className="text-3xl font-bold text-stone-900">Explore Local Parks</h2>
+            <p className="text-stone-500 mt-2">
+              {isSearching ? 'Results for your search' : 'These spaces need your help the most right now.'}
+            </p>
           </div>
-          <Button variant="outline" onClick={() => setView(ViewState.PARKS)}>View All</Button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {parks.slice(0,3).map(park => (
-            <ParkCard key={park.id} park={park} onClick={() => handleParkClick(park.id)} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
 
-  const renderParkList = () => (
-    <div className="max-w-7xl mx-auto px-4 py-12 min-h-screen">
-      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-stone-900 mb-2">Explore Parks</h1>
-          <p className="text-stone-600">
-            {parks.length} parks found. Select a park to view maintenance tasks.
-          </p>
+        {/* Map Visualization */}
+        <div className="mb-8">
+          <ParkMap parks={parks} onParkClick={handleParkClick} />
         </div>
-        <Button variant="outline" onClick={() => setView(ViewState.HOME)}>
-          <Search size={16} className="mr-2" /> Search Again
-        </Button>
+
+        {/* List of Parks */}
+        {isSearching ? (
+           <div className="flex flex-col items-center justify-center py-20 text-stone-400 h-[300px] bg-stone-50 rounded-xl border border-stone-200 border-dashed">
+             <div className="w-8 h-8 border-2 border-emerald-100 border-t-emerald-500 rounded-full animate-spin mb-4" />
+             <p>Updating results...</p>
+           </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {parks.length > 0 ? (
+              parks.map(park => (
+                <ParkCard key={park.id} park={park} onClick={() => handleParkClick(park.id)} />
+              ))
+            ) : (
+              <div className="col-span-full py-12 text-center text-stone-500 bg-stone-50 rounded-xl border border-dashed border-stone-300">
+                No parks found.
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      
-      {isSearching ? (
-        <div className="flex flex-col items-center justify-center py-20 text-stone-400 h-[300px] bg-stone-50 rounded-xl border border-stone-200 border-dashed">
-           <div className="w-8 h-8 border-2 border-emerald-100 border-t-emerald-500 rounded-full animate-spin mb-4" />
-           <p>Updating results...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {parks.length > 0 ? (
-            parks.map(park => (
-              <ParkCard key={park.id} park={park} onClick={() => handleParkClick(park.id)} />
-            ))
-          ) : (
-            <div className="col-span-full py-12 text-center text-stone-500 bg-stone-50 rounded-xl border border-dashed border-stone-300">
-              No parks found. Try searching for a different location on the home page.
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 
@@ -355,7 +410,7 @@ export default function App() {
         <div className="bg-stone-900 text-white py-12 md:py-20">
           <div className="max-w-7xl mx-auto px-4">
             <button 
-              onClick={() => setView(ViewState.PARKS)} 
+              onClick={() => setView(ViewState.HOME)} 
               className="flex items-center gap-2 text-stone-400 hover:text-white mb-6 transition-colors"
             >
               <ArrowLeft size={16} /> Back to Parks
@@ -436,6 +491,9 @@ export default function App() {
                             <span className="flex items-center gap-1">
                               <Calendar size={12} /> {task.date}
                             </span>
+                            <span className="flex items-center gap-1 font-bold text-emerald-600">
+                              <Award size={12} /> 10 pts
+                            </span>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -443,7 +501,7 @@ export default function App() {
                             size="sm" 
                             variant="outline"
                             className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 px-2"
-                            title="Mark as Complete"
+                            title="Mark as Complete (+10 pts)"
                             onClick={() => handleCompleteTask(selectedPark.id, task.id)}
                           >
                             <Check size={16} />
@@ -494,7 +552,10 @@ export default function App() {
                        <div key={task.id} className="flex items-center justify-between p-3 bg-stone-50 rounded-lg group">
                           <div className="flex items-center gap-3">
                             <CheckCircle2 className="text-emerald-600" size={20} />
-                            <span className="text-stone-600 line-through decoration-emerald-500/50">{task.title}</span>
+                            <div className="flex flex-col">
+                              <span className="text-stone-600 line-through decoration-emerald-500/50">{task.title}</span>
+                              <span className="text-xs text-emerald-600">+10 pts earned</span>
+                            </div>
                           </div>
                           <button 
                             onClick={() => handleDeleteTask(selectedPark.id, task.id)}
@@ -552,12 +613,85 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-stone-50 flex flex-col font-sans">
-      <Header currentView={view} setView={setView} />
+    <div className="min-h-screen bg-stone-50 flex flex-col font-sans relative">
+      <Header 
+        currentView={view} 
+        setView={setView} 
+        userPoints={userPoints} 
+        onOpenHistory={() => setShowHistory(true)}
+      />
       
+      {/* Toast Notification */}
+      {notification && (
+        <div className="fixed top-20 right-4 z-[100] bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-xl animate-bounce flex items-center gap-2">
+          <Trophy size={20} className="text-yellow-300" />
+          <span className="font-bold">{notification}</span>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {showHistory && (
+        <div 
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowHistory(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden transform transition-all"
+            onClick={e => e.stopPropagation()}
+          >
+             <div className="p-6 border-b border-stone-100 flex justify-between items-center bg-emerald-50">
+               <div>
+                 <h2 className="text-xl font-bold text-stone-800 flex items-center gap-2">
+                   <TrendingUp className="text-emerald-600" size={24} />
+                   Impact History
+                 </h2>
+                 <p className="text-xs text-emerald-700 mt-1">Keep growing your roots!</p>
+               </div>
+               <button 
+                 onClick={() => setShowHistory(false)}
+                 className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-stone-400 hover:text-stone-600 hover:bg-stone-100 transition-colors"
+               >
+                 <X size={20} />
+               </button>
+             </div>
+             
+             <div className="p-6">
+                <div className="flex items-center justify-between mb-6 bg-stone-50 p-4 rounded-xl">
+                   <div className="text-center">
+                      <div className="text-xs text-stone-500 uppercase font-semibold">Total Points</div>
+                      <div className="text-2xl font-bold text-emerald-600">{userPoints}</div>
+                   </div>
+                   <div className="h-8 w-px bg-stone-200" />
+                   <div className="text-center">
+                      <div className="text-xs text-stone-500 uppercase font-semibold">Root Depth</div>
+                      <div className="text-2xl font-bold text-emerald-800">{Math.floor(userPoints/100)}m</div>
+                   </div>
+                </div>
+
+                <h3 className="text-sm font-semibold text-stone-700 mb-3 uppercase tracking-wider">Recent Activity</h3>
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                   {pointsHistory.map((item) => (
+                     <div key={item.id} className="flex items-center justify-between p-3 rounded-lg border border-stone-100 hover:bg-stone-50 transition-colors">
+                        <div className="flex flex-col">
+                           <span className="font-medium text-stone-800 text-sm">{item.action}</span>
+                           <span className="text-xs text-stone-400 flex items-center gap-1">
+                             <Clock size={10} /> {item.date}
+                           </span>
+                        </div>
+                        <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded text-xs">
+                           +{item.points}
+                        </span>
+                     </div>
+                   ))}
+                </div>
+             </div>
+          </div>
+        </div>
+      )}
+
       <main className="flex-grow">
         {view === ViewState.HOME && renderHome()}
-        {view === ViewState.PARKS && renderParkList()}
+        {view === ViewState.PARKS && renderHome()} {/* Fallback if needed, though view state removed */}
         {view === ViewState.PARK_DETAIL && renderParkDetail()}
         {view === ViewState.ASSISTANT && renderAssistantView()}
       </main>
